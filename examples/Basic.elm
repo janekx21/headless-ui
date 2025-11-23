@@ -8,11 +8,13 @@ import Thing exposing (..)
 type alias Model =
     { username : String
     , password : String
+    , thingModel : Thing.Model
     }
 
 
 type Msg
     = ChangeUsername String
+    | ThingMsg Thing.Msg
 
 
 main =
@@ -25,7 +27,7 @@ main =
 
 init : Model
 init =
-    { username = "", password = "" }
+    { username = "", password = "", thingModel = Thing.init }
 
 
 update : Msg -> Model -> Model
@@ -34,10 +36,18 @@ update msg model =
         ChangeUsername username ->
             { model | username = username }
 
+        ThingMsg m ->
+            { model | thingModel = Thing.update m model.thingModel }
+
 
 view : Model -> Html.Html Msg
 view model =
-    toHtml { plugins = [ superRounder, superTextRenderer, basicButtons ] } <|
+    toHtml
+        { plugins = [ superRounder, superTextRenderer, basicButtons, basicLineInput ]
+        , intoMsg = ThingMsg
+        }
+        model.thingModel
+    <|
         col
             [ viewLogin model
             , row
@@ -117,6 +127,23 @@ basicButtons =
             case e of
                 Button child ->
                     Button <| el { defaultElAttributes | padding = 8, backgroundColor = "#00458f", fontColor = "white", rounding = 24 } <| child
+
+                _ ->
+                    e
+    }
+
+
+{-| Add basic button design
+-}
+basicLineInput : Plugin msg
+basicLineInput =
+    { renderPoint =
+        \e ->
+            case e of
+                LineInput msg value ->
+                    el { defaultElAttributes | padding = 1, backgroundColor = "#00458f", rounding = 24 } <|
+                        el { defaultElAttributes | padding = 5, backgroundColor = "white", fontColor = "black", rounding = 24 } <|
+                            LineInput msg value
 
                 _ ->
                     e

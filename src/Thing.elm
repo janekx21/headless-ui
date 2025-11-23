@@ -1,5 +1,6 @@
-module Thing exposing (Element(..), HtmlConfig, Plugin, RenderPoint, button, col, defaultElAttributes, el, lineInput, row, text, toHtml)
+module Thing exposing (Element(..), HtmlConfig, Model, Msg, Plugin, RenderPoint, button, col, defaultElAttributes, el, init, lineInput, row, text, toHtml, update)
 
+import Dict exposing (Dict)
 import Html
 import Html.Attributes
 import Html.Events
@@ -34,6 +35,7 @@ defaultElAttributes =
 
 type alias HtmlConfig msg =
     { plugins : List (Plugin msg)
+    , intoMsg : Msg -> msg
     }
 
 
@@ -46,8 +48,42 @@ type alias RenderPoint msg =
     Element msg -> Element msg
 
 
-toHtml : HtmlConfig msg -> Element msg -> Html.Html msg
-toHtml config preElement =
+
+-- type alias UpatePoint =
+--     Msg -> Msg
+
+
+type alias Model =
+    { hovering : Dict String Bool
+    }
+
+
+type Msg
+    = NoOp
+    | Hover String
+    | UnHover String
+
+
+init : Model
+init =
+    { hovering = Dict.empty }
+
+
+update : Msg -> Model -> Model
+update msg model =
+    case msg of
+        NoOp ->
+            model
+
+        Hover key ->
+            { model | hovering = Dict.insert key True model.hovering }
+
+        UnHover key ->
+            { model | hovering = Dict.remove key model.hovering }
+
+
+toHtml : HtmlConfig msg -> Model -> Element msg -> Html.Html msg
+toHtml config model preElement =
     let
         postElement =
             config.plugins |> List.foldl (\item acc -> preProcess item.renderPoint acc) preElement
@@ -76,7 +112,14 @@ toHtml config preElement =
                     LineInput onChange str ->
                         LineInput onChange str
 
-        render element =
+        render element key =
+            let
+                renderIndex =
+                    \i c -> render c (key ++ "/" ++ String.fromInt i)
+
+                hovering =
+                    model.hovering |> Dict.get key |> Maybe.withDefault False
+            in
             case element of
                 None ->
                     Html.text ""
@@ -86,30 +129,39 @@ toHtml config preElement =
 
                 El attr child ->
                     Html.div
-                        [ style "color" attr.fontColor
-                        , style "background-color" attr.backgroundColor
-                        , style "padding" (String.fromInt attr.padding ++ "px")
-                        , style "border-radius" (String.fromInt attr.rounding ++ "px")
-                        ]
-                        [ render child ]
+                        ([ style "color" attr.fontColor
+                         , style "background-color" attr.backgroundColor
+                         , style "padding" (String.fromInt attr.padding ++ "px")
+                         , style "border-radius" (String.fromInt attr.rounding ++ "px")
+                         , Html.Events.onMouseEnter (config.intoMsg <| Hover key)
+                         , Html.Events.onMouseLeave (config.intoMsg <| UnHover key)
+                         ]
+                            ++ (if hovering then
+                                    [ style "outline" "5px solid greenyellow" ]
+
+                                else
+                                    []
+                               )
+                        )
+                        [ render child (key ++ "/el") ]
 
                 Row children ->
                     Html.div [ style "display" "flex", style "gap" "16px" ]
-                        (List.map render children)
+                        (List.indexedMap renderIndex children)
 
                 Col children ->
                     Html.div [ style "display" "flex", style "gap" "16px", style "flex-direction" "column" ]
-                        (List.map render children)
+                        (List.indexedMap renderIndex children)
 
                 Button child ->
-                    Html.button [] [ render child ]
+                    Html.button [] [ render child (key ++ "/button") ]
 
                 LineInput onChange str ->
                     Html.input [ Html.Events.onInput onChange, Html.Attributes.value str ] []
     in
     Html.div []
         [ cssReset
-        , render postElement
+        , render postElement "root"
         ]
 
 
@@ -269,4 +321,9 @@ button {
     cursor: pointer;
 }
 
+
+* {
+    outline: 0px solid white;
+    transition: outline 250ms;
+}
 """ ]
