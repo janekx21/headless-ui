@@ -1,7 +1,74 @@
 module Basic exposing (..)
 
+import Browser
 import Html
 import Thing exposing (..)
+
+
+type alias Model =
+    { username : String
+    , password : String
+    }
+
+
+type Msg
+    = ChangeUsername String
+
+
+main =
+    Browser.sandbox
+        { init = init
+        , update = update
+        , view = view
+        }
+
+
+init : Model
+init =
+    { username = "", password = "" }
+
+
+update : Msg -> Model -> Model
+update msg model =
+    case msg of
+        ChangeUsername username ->
+            { model | username = username }
+
+
+view : Model -> Html.Html Msg
+view model =
+    toHtml { plugins = [ superRounder, superTextRenderer, basicButtons ] } <|
+        col
+            [ viewLogin model
+            , row
+                [ text "Hello"
+                , el { defaultElAttributes | fontColor = "red", backgroundColor = "black" } <| text "World"
+                , el { defaultElAttributes | padding = 20 } <| col [ text "A", text "B", button <| text "C", viewLogin model ]
+                , button <| col [ text "1", text "2", candy <| candy <| text "Hi" ]
+                , el { defaultElAttributes | backgroundColor = "red", padding = 8 } <|
+                    el { defaultElAttributes | fontColor = "red", backgroundColor = "black", padding = 4 } <|
+                        text "Janek"
+                ]
+            ]
+
+
+viewLogin model =
+    el { defaultElAttributes | padding = 8, backgroundColor = "#e6a3a2", rounding = 16 } <|
+        col
+            [ row [ text "Please sign in ", text model.username ]
+            , row [ text "Username", lineInput ChangeUsername model.username ]
+            , row [ text "Password", lineInput ChangeUsername model.username ]
+            , button <| text "Login"
+            ]
+
+
+candy =
+    el { defaultElAttributes | backgroundColor = "blue", padding = 2 }
+        << el { defaultElAttributes | backgroundColor = "orange", padding = 2 }
+
+
+
+-- User Plugins
 
 
 superTextRenderer : Plugin msg
@@ -9,25 +76,48 @@ superTextRenderer =
     { renderPoint =
         \e ->
             case e of
-                Text _ ->
-                    row [ text "{", e, text "}" ]
+                Text txt ->
+                    if String.length txt > 3 then
+                        row [ text txt, text "..." ]
+
+                    else
+                        row [ text "(", text txt, text ")" ]
 
                 _ ->
                     e
     }
 
 
-superRenderer : Plugin msg
-superRenderer =
-    { renderPoint = \e -> col [ text "<", e, text ">" ] }
+{-| Rounds everything
+-}
+superRounder : Plugin msg
+superRounder =
+    { renderPoint =
+        \e ->
+            case e of
+                El attr child ->
+                    case attr.rounding of
+                        0 ->
+                            el { attr | rounding = 16 } child
+
+                        _ ->
+                            e
+
+                _ ->
+                    e
+    }
 
 
-main : Html.Html msg
-main =
-    Thing.html { plugins = [ superRenderer, superTextRenderer ] } <|
-        row
-            [ text "Hello"
-            , el { fontColor = "red" } <| text "World"
-            , col [ text "A", text "B", button <| text "C" ]
-            , button <| col [ text "1", text "2" ]
-            ]
+{-| Add basic button design
+-}
+basicButtons : Plugin msg
+basicButtons =
+    { renderPoint =
+        \e ->
+            case e of
+                Button child ->
+                    Button <| el { defaultElAttributes | padding = 8, backgroundColor = "#00458f", fontColor = "white", rounding = 24 } <| child
+
+                _ ->
+                    e
+    }
