@@ -1,6 +1,6 @@
 module Thing exposing
     ( Element(..)
-    , HtmlConfig, Model, Msg, Plugin, RenderPoint, button, col, defaultElAttributes, el, init, lineInput, row, text, toHtml, update
+    , HtmlConfig, Model, Msg(..), Plugin, PluginMsg(..), RenderPoint, Tag(..), button, col, defaultElAttributes, el, init, lineInput, row, tagged, text, toHtml, update
     )
 
 {-| This library is the implementation and interface for an abstract UI.
@@ -18,7 +18,7 @@ import Html.Attributes
 import Html.Events
 
 
-{-| Represents an abstract UI element. The type is completly exposed for modification purposes in the `Plugin` system.
+{-| Represents an abstract UI element. The type is completely exposed for modification purposes in the `Plugin` system.
 
   - None is no element at all. It will not be rendered at all.
   - Text is just a label in the UI
@@ -40,16 +40,79 @@ type Element msg
     | Tagged Tag (Element msg)
 
 
+
+-- TODO --| Tabbed (List ( Element msg, Element msg ))
+
+
 type alias ElAttributes =
     { fontColor : String
     , backgroundColor : String
     , padding : Int
     , rounding : Int
+    , borderColor : String
+    , borderWidth : Int
     }
 
 
 type Tag
-    = Card
+    = Submit
+    | Cancle
+      -- inspired by shadcn components
+      -- https://ui.shadcn.com/docs/components
+    | Accordion
+    | Alert
+    | Dialog
+    | Avatar
+    | Badge
+    | Breadcrumb
+    | ButtonGroup
+    | Calendar
+    | Card
+    | Carousel
+    | Chart
+      -- Like a dropdown
+    | Combobox
+      -- Like a context menu but without opening
+    | Command
+    | ContextMenu
+    | Collapsible
+    | Table
+    | DatePicker
+    | Drawer
+    | DropdownMenu
+    | Empty
+    | Field
+    | InputGroup
+    | Form
+    | HoverCard
+    | Item
+    | KeyboardButton
+      -- For fields
+    | Label
+    | Menubar
+    | NavigationMenu
+    | Pagination
+    | Popover
+    | Progress
+    | RadioGroup
+    | Resizable
+    | ScrollArea
+    | Select
+    | Seperator
+      -- Dialog on the side
+    | Sheet
+    | Sidebar
+    | Skeleton
+    | Slider
+    | Sonner
+    | Spinner
+    | Switch
+    | Tabs
+    | Textarea
+    | Toast
+    | ToggleGroup
+    | Toggle
+    | Tooltip
 
 
 defaultElAttributes : ElAttributes
@@ -58,6 +121,8 @@ defaultElAttributes =
     , backgroundColor = "white"
     , padding = 0
     , rounding = 0
+    , borderColor = "black"
+    , borderWidth = 0
     }
 
 
@@ -69,20 +134,29 @@ type alias HtmlConfig msg =
 
 type alias Plugin msg =
     { renderPoint : RenderPoint msg
+    , name : String
+
+    --, init : pluginModel
     }
 
 
 type alias RenderPoint msg =
-    Element msg -> Element msg
+    Element (PluginMsg msg) -> Element (PluginMsg msg)
+
+
+type PluginMsg msg
+    = PluginM String
+    | External msg
 
 
 
--- type alias UpatePoint =
---     Msg -> Msg
+--type alias UpatePoint =
+--    Msg -> Msg
 
 
 type alias Model =
     { hovering : Dict String Bool
+    , pluginModels : Dict String (Dict String String)
     }
 
 
@@ -90,11 +164,12 @@ type Msg
     = NoOp
     | Hover String
     | UnHover String
+    | PluginEvent String String
 
 
 init : Model
 init =
-    { hovering = Dict.empty }
+    { hovering = Dict.empty, pluginModels = Dict.empty }
 
 
 update : Msg -> Model -> Model
@@ -109,13 +184,34 @@ update msg model =
         UnHover key ->
             { model | hovering = Dict.remove key model.hovering }
 
+        PluginEvent string string2 ->
+            -- TODO do stuff
+            model
+
 
 toHtml : HtmlConfig msg -> Model -> Element msg -> Html.Html msg
 toHtml config model preElement =
     let
         postElement =
-            config.plugins |> List.foldl (\item acc -> preProcess item.renderPoint acc) preElement
+            config.plugins
+                |> List.foldl
+                    (\item acc ->
+                        preProcess
+                            (item.renderPoint
+                             --|> (\x ->
+                             --        case x of
+                             --            External m ->
+                             --                m
+                             --
+                             --            PluginM m ->
+                             --                config.intoMsg (PluginEvent item.name m)
+                             --   )
+                            )
+                            acc
+                    )
+                    preElement
 
+        preProcess : RenderPoint msg -> Element msg -> b
         preProcess func element =
             func <|
                 case element of
@@ -140,6 +236,9 @@ toHtml config model preElement =
                     LineInput onChange str ->
                         LineInput onChange str
 
+                    Tagged tag child ->
+                        Tagged tag (preProcess func child)
+
         render element key =
             let
                 renderIndex =
@@ -162,6 +261,9 @@ toHtml config model preElement =
                          , style "padding" (String.fromInt attr.padding ++ "px")
                          , style "border-radius" (String.fromInt attr.rounding ++ "px")
                          , style "display" "flex"
+                         , style "border-color" attr.borderColor
+                         , style "border-width" (String.fromInt attr.borderWidth ++ "px")
+                         , style "border-style" "solid"
                          , Html.Events.onMouseEnter (config.intoMsg <| Hover key)
                          , Html.Events.onMouseLeave (config.intoMsg <| UnHover key)
                          ]
@@ -187,6 +289,10 @@ toHtml config model preElement =
 
                 LineInput onChange str ->
                     Html.input [ Html.Events.onInput onChange, Html.Attributes.value str ] []
+
+                -- Tags are not rendered
+                Tagged _ child ->
+                    render child (key ++ "/tagged")
     in
     Html.div []
         [ cssReset
@@ -222,6 +328,11 @@ button onClick child =
 lineInput : (String -> msg) -> String -> Element msg
 lineInput onChange str =
     LineInput onChange str
+
+
+tagged : Tag -> Element msg -> Element msg
+tagged tag =
+    Tagged tag
 
 
 style : String -> String -> Html.Attribute msg

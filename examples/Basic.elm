@@ -2,6 +2,7 @@ module Basic exposing (..)
 
 import Browser
 import Html
+import List.Extra
 import Thing exposing (..)
 
 
@@ -61,24 +62,29 @@ update msg model =
 view : Model -> Html.Html Msg
 view model =
     toHtml
-        { plugins = [ superRounder, superTextRenderer, basicButtons, basicLineInput ]
+        { plugins = [ superRounder, superTextRenderer, basicButtons, basicLineInput, tabPlugin ]
         , intoMsg = ThingMsg
         }
         model.thingModel
     <|
-        col
-            [ viewLogin model
-            , row
-                [ text "Hello"
-                , el { defaultElAttributes | fontColor = "red", backgroundColor = "black" } <| text "World"
-                , el { defaultElAttributes | padding = 20 } <| col [ text "A", text "B", button NoOp <| text "C", viewLogin model ]
-                , button NoOp <| col [ text "1", text "2", candy <| candy <| text "Hi" ]
-                , el { defaultElAttributes | backgroundColor = "red", padding = 8 } <|
-                    el { defaultElAttributes | fontColor = "red", backgroundColor = "black", padding = 4 } <|
-                        text "Janek"
+        tagged Tabs <|
+            row
+                [ col
+                    [ viewLogin model
+                    , row
+                        [ text "Hello"
+                        , el { defaultElAttributes | fontColor = "red", backgroundColor = "black" } <| text "World"
+                        , el { defaultElAttributes | padding = 20 } <| col [ text "A", text "B", button NoOp <| text "C", viewLogin model ]
+                        , button NoOp <| col [ text "1", text "2", candy <| candy <| text "Hi" ]
+                        , el { defaultElAttributes | backgroundColor = "red", padding = 8 } <|
+                            el { defaultElAttributes | fontColor = "red", backgroundColor = "black", padding = 4 } <|
+                                text "Janek"
+                        ]
+                    , viewChat model
+                    ]
+                , text "Hello world"
+                , col [ text "Hello World" ]
                 ]
-            , viewChat model
-            ]
 
 
 viewLogin model =
@@ -95,7 +101,7 @@ viewChat model =
     col
         [ text "Chat Window"
         , model.chat |> List.map (\( user, message ) -> row [ text user, text message ]) |> col
-        , row [ lineInput ChangeChatMessage model.chatMessage, button SendChatMessage <| text "Send" ]
+        , row [ lineInput ChangeChatMessage model.chatMessage, tagged Submit <| button SendChatMessage <| text "Send" ]
         ]
 
 
@@ -108,17 +114,22 @@ candy =
 -- User Plugins
 
 
+{-| Renders empty text extra
+-}
 superTextRenderer : Plugin msg
 superTextRenderer =
     { renderPoint =
         \e ->
             case e of
                 Text txt ->
-                    if String.length txt > 3 then
-                        row [ text txt, text "..." ]
+                    if String.length txt > 50 then
+                        row [ text <| String.slice 0 50 txt, text "..." ]
+
+                    else if String.isEmpty txt then
+                        el { defaultElAttributes | fontColor = "rgba(0,0,0,0.5)" } <| text "(empty)"
 
                     else
-                        row [ text "(", text txt, text ")" ]
+                        text txt
 
                 _ ->
                     e
@@ -132,6 +143,14 @@ superRounder =
     { renderPoint =
         \e ->
             case e of
+                El attr (El attr2 child) ->
+                    case attr.rounding of
+                        0 ->
+                            el { attr | rounding = attr2.rounding + attr.padding } <| el attr2 child
+
+                        _ ->
+                            e
+
                 El attr child ->
                     case attr.rounding of
                         0 ->
@@ -145,7 +164,8 @@ superRounder =
     }
 
 
-{-| Add basic button design
+{-| Add basic button design.
+Has extra style for submit buttons.
 -}
 basicButtons : Plugin msg
 basicButtons =
@@ -153,14 +173,37 @@ basicButtons =
         \e ->
             case e of
                 Button o child ->
-                    Button o <| el { defaultElAttributes | padding = 8, backgroundColor = "#00458f", fontColor = "white", rounding = 24 } <| child
+                    Button o <|
+                        el
+                            { defaultElAttributes
+                                | padding = 8
+                                , backgroundColor = "#20252f"
+                                , fontColor = "white"
+                                , rounding = 24
+                            }
+                        <|
+                            child
+
+                Tagged Submit (Button o (El _ child)) ->
+                    Button o <|
+                        el
+                            { defaultElAttributes
+                                | padding = 8
+                                , backgroundColor = "#00458f"
+                                , fontColor = "white"
+                                , rounding = 24
+                                , borderWidth = 2
+                                , borderColor = "red"
+                            }
+                        <|
+                            child
 
                 _ ->
                     e
     }
 
 
-{-| Add basic button design
+{-| Add basic line input design
 -}
 basicLineInput : Plugin msg
 basicLineInput =
@@ -174,4 +217,27 @@ basicLineInput =
 
                 _ ->
                     e
+    }
+
+
+{-| Add tabs
+-}
+tabPlugin : Plugin msg
+tabPlugin =
+    { renderPoint =
+        \e ->
+            let
+                index =
+                    0
+            in
+            case e of
+                Tagged Tabs (Row children) ->
+                    col
+                        [ row <| List.indexedMap (\i c -> button (PluginM "New Index") <| text (String.fromInt i)) children
+                        , List.Extra.getAt index children |> Maybe.withDefault None
+                        ]
+
+                _ ->
+                    e
+    , name = "Tab Plugin"
     }
