@@ -35,7 +35,7 @@ type Element msg
     | El ElAttributes (Element msg)
     | Row (List (Element msg))
     | Col (List (Element msg))
-    | Button (Element msg)
+    | Button msg (Element msg)
     | LineInput (String -> msg) String
     | Tagged Tag (Element msg)
 
@@ -134,8 +134,8 @@ toHtml config model preElement =
                     Col children ->
                         Col (children |> List.map (preProcess func))
 
-                    Button child ->
-                        Button (preProcess func child)
+                    Button onClick child ->
+                        Button onClick (preProcess func child)
 
                     LineInput onChange str ->
                         LineInput onChange str
@@ -161,6 +161,7 @@ toHtml config model preElement =
                          , style "background-color" attr.backgroundColor
                          , style "padding" (String.fromInt attr.padding ++ "px")
                          , style "border-radius" (String.fromInt attr.rounding ++ "px")
+                         , style "display" "flex"
                          , Html.Events.onMouseEnter (config.intoMsg <| Hover key)
                          , Html.Events.onMouseLeave (config.intoMsg <| UnHover key)
                          ]
@@ -181,8 +182,8 @@ toHtml config model preElement =
                     Html.div [ style "display" "flex", style "gap" "16px", style "flex-direction" "column" ]
                         (List.indexedMap renderIndex children)
 
-                Button child ->
-                    Html.button [] [ render child (key ++ "/button") ]
+                Button onClick child ->
+                    Html.button [ Html.Events.onClick onClick ] [ render child (key ++ "/button") ]
 
                 LineInput onChange str ->
                     Html.input [ Html.Events.onInput onChange, Html.Attributes.value str ] []
@@ -213,9 +214,9 @@ col children =
     Col children
 
 
-button : Element msg -> Element msg
-button child =
-    Button child
+button : msg -> Element msg -> Element msg
+button onClick child =
+    Button onClick child
 
 
 lineInput : (String -> msg) -> String -> Element msg

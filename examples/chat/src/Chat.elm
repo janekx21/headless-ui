@@ -1,7 +1,8 @@
-module Basic exposing (..)
+module Chat exposing (..)
 
 import Browser
 import Html
+,,,
 import Thing exposing (..)
 
 
@@ -9,17 +10,12 @@ type alias Model =
     { username : String
     , password : String
     , thingModel : Thing.Model
-    , chat : List ( String, String )
-    , chatMessage : String
     }
 
 
 type Msg
     = ChangeUsername String
     | ThingMsg Thing.Msg
-    | ChangeChatMessage String
-    | SendChatMessage
-    | NoOp
 
 
 main =
@@ -32,30 +28,17 @@ main =
 
 init : Model
 init =
-    { username = "", password = "", thingModel = Thing.init, chat = [], chatMessage = "" }
+    { username = "", password = "", thingModel = Thing.init }
 
 
 update : Msg -> Model -> Model
 update msg model =
     case msg of
-        NoOp ->
-            model
-
         ChangeUsername username ->
             { model | username = username }
 
         ThingMsg m ->
             { model | thingModel = Thing.update m model.thingModel }
-
-        ChangeChatMessage s ->
-            { model | chatMessage = s }
-
-        SendChatMessage ->
-            if model.chatMessage /= "" then
-                { model | chat = model.chat ++ [ ( "Janek", model.chatMessage ) ], chatMessage = "" }
-
-            else
-                model
 
 
 view : Model -> Html.Html Msg
@@ -71,13 +54,12 @@ view model =
             , row
                 [ text "Hello"
                 , el { defaultElAttributes | fontColor = "red", backgroundColor = "black" } <| text "World"
-                , el { defaultElAttributes | padding = 20 } <| col [ text "A", text "B", button NoOp <| text "C", viewLogin model ]
-                , button NoOp <| col [ text "1", text "2", candy <| candy <| text "Hi" ]
+                , el { defaultElAttributes | padding = 20 } <| col [ text "A", text "B", button <| text "C", viewLogin model ]
+                , button <| col [ text "1", text "2", candy <| candy <| text "Hi" ]
                 , el { defaultElAttributes | backgroundColor = "red", padding = 8 } <|
                     el { defaultElAttributes | fontColor = "red", backgroundColor = "black", padding = 4 } <|
                         text "Janek"
                 ]
-            , viewChat model
             ]
 
 
@@ -87,16 +69,8 @@ viewLogin model =
             [ row [ text "Please sign in ", text model.username ]
             , row [ text "Username", lineInput ChangeUsername model.username ]
             , row [ text "Password", lineInput ChangeUsername model.username ]
-            , button NoOp <| text "Login"
+            , button <| text "Login"
             ]
-
-
-viewChat model =
-    col
-        [ text "Chat Window"
-        , model.chat |> List.map (\( user, message ) -> row [ text user, text message ]) |> col
-        , row [ lineInput ChangeChatMessage model.chatMessage, button SendChatMessage <| text "Send" ]
-        ]
 
 
 candy =
@@ -152,8 +126,8 @@ basicButtons =
     { renderPoint =
         \e ->
             case e of
-                Button o child ->
-                    Button o <| el { defaultElAttributes | padding = 8, backgroundColor = "#00458f", fontColor = "white", rounding = 24 } <| child
+                Button child ->
+                    Button <| el { defaultElAttributes | padding = 8, backgroundColor = "#00458f", fontColor = "white", rounding = 24 } <| child
 
                 _ ->
                     e
