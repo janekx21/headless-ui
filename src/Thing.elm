@@ -1,4 +1,16 @@
-module Thing exposing (Element(..), HtmlConfig, Model, Msg, Plugin, RenderPoint, button, col, defaultElAttributes, el, init, lineInput, row, text, toHtml, update)
+module Thing exposing
+    ( Element(..)
+    , HtmlConfig, Model, Msg, Plugin, RenderPoint, button, col, defaultElAttributes, el, init, lineInput, row, text, toHtml, update
+    )
+
+{-| This library is the implementation and interface for an abstract UI.
+
+
+# Element Definition
+
+@docs Element
+
+-}
 
 import Dict exposing (Dict)
 import Html
@@ -6,6 +18,17 @@ import Html.Attributes
 import Html.Events
 
 
+{-| Represents an abstract UI element. The type is completly exposed for modification purposes in the `Plugin` system.
+
+  - None is no element at all. It will not be rendered at all.
+  - Text is just a label in the UI
+  - El is for styling
+  - Row & Col are rows and columns
+  - Button is a simple interactable that you can click
+  - LineInput is a single line text input
+  - Tagged is a node that has a special tag. Tags indicate element kinds.
+
+-}
 type Element msg
     = None
     | Text String
@@ -14,6 +37,7 @@ type Element msg
     | Col (List (Element msg))
     | Button (Element msg)
     | LineInput (String -> msg) String
+    | Tagged Tag (Element msg)
 
 
 type alias ElAttributes =
@@ -22,6 +46,10 @@ type alias ElAttributes =
     , padding : Int
     , rounding : Int
     }
+
+
+type Tag
+    = Card
 
 
 defaultElAttributes : ElAttributes
