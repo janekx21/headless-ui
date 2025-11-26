@@ -186,32 +186,66 @@ update msg model =
 
         PluginEvent string string2 ->
             -- TODO do stuff
+            let
+                _ =
+                    Debug.log "event"
+                        string2
+            in
             model
+
+
+mapMsg : (a -> b) -> Element a -> Element b
+mapMsg func element =
+    case element of
+        None ->
+            None
+
+        Text txt ->
+            Text txt
+
+        El attr child ->
+            El attr (mapMsg func child)
+
+        Row children ->
+            Row (List.map (mapMsg func) children)
+
+        Col children ->
+            Col (List.map (mapMsg func) children)
+
+        Button onClick child ->
+            Button (func onClick) (mapMsg func child)
+
+        LineInput onChange str ->
+            LineInput (func << onChange) str
+
+        Tagged tag child ->
+            Tagged tag (mapMsg func child)
 
 
 toHtml : HtmlConfig msg -> Model -> Element msg -> Html.Html msg
 toHtml config model preElement =
     let
+        postElement : Element msg
         postElement =
             config.plugins
                 |> List.foldl
                     (\item acc ->
                         preProcess
-                            (item.renderPoint
-                             --|> (\x ->
-                             --        case x of
-                             --            External m ->
-                             --                m
-                             --
-                             --            PluginM m ->
-                             --                config.intoMsg (PluginEvent item.name m)
-                             --   )
-                            )
+                            item.renderPoint
                             acc
                     )
-                    preElement
+                    (mapMsg (\x -> External x) preElement)
+                |> mapMsg
+                    (\x ->
+                        case x of
+                            External m ->
+                                m
 
-        preProcess : RenderPoint msg -> Element msg -> b
+                            PluginM m ->
+                                config.intoMsg (PluginEvent "TODO" m)
+                    )
+
+        preProcess : RenderPoint a -> Element (PluginMsg a) -> Element (PluginMsg a)
         preProcess func element =
             func <|
                 case element of
@@ -239,6 +273,7 @@ toHtml config model preElement =
                     Tagged tag child ->
                         Tagged tag (preProcess func child)
 
+        render : Element msg -> String -> Html.Html msg
         render element key =
             let
                 renderIndex =

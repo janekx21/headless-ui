@@ -62,7 +62,14 @@ update msg model =
 view : Model -> Html.Html Msg
 view model =
     toHtml
-        { plugins = [ superRounder, superTextRenderer, basicButtons, basicLineInput, tabPlugin ]
+        { plugins =
+            [ -- superRounder
+              --, superTextRenderer
+              --, basicButtons
+              --, basicLineInput
+              --,
+              tabPlugin
+            ]
         , intoMsg = ThingMsg
         }
         model.thingModel
@@ -112,112 +119,110 @@ candy =
 
 
 -- User Plugins
-
-
-{-| Renders empty text extra
--}
-superTextRenderer : Plugin msg
-superTextRenderer =
-    { renderPoint =
-        \e ->
-            case e of
-                Text txt ->
-                    if String.length txt > 50 then
-                        row [ text <| String.slice 0 50 txt, text "..." ]
-
-                    else if String.isEmpty txt then
-                        el { defaultElAttributes | fontColor = "rgba(0,0,0,0.5)" } <| text "(empty)"
-
-                    else
-                        text txt
-
-                _ ->
-                    e
-    }
-
-
-{-| Rounds everything
--}
-superRounder : Plugin msg
-superRounder =
-    { renderPoint =
-        \e ->
-            case e of
-                El attr (El attr2 child) ->
-                    case attr.rounding of
-                        0 ->
-                            el { attr | rounding = attr2.rounding + attr.padding } <| el attr2 child
-
-                        _ ->
-                            e
-
-                El attr child ->
-                    case attr.rounding of
-                        0 ->
-                            el { attr | rounding = 16 } child
-
-                        _ ->
-                            e
-
-                _ ->
-                    e
-    }
-
-
-{-| Add basic button design.
-Has extra style for submit buttons.
--}
-basicButtons : Plugin msg
-basicButtons =
-    { renderPoint =
-        \e ->
-            case e of
-                Button o child ->
-                    Button o <|
-                        el
-                            { defaultElAttributes
-                                | padding = 8
-                                , backgroundColor = "#20252f"
-                                , fontColor = "white"
-                                , rounding = 24
-                            }
-                        <|
-                            child
-
-                Tagged Submit (Button o (El _ child)) ->
-                    Button o <|
-                        el
-                            { defaultElAttributes
-                                | padding = 8
-                                , backgroundColor = "#00458f"
-                                , fontColor = "white"
-                                , rounding = 24
-                                , borderWidth = 2
-                                , borderColor = "red"
-                            }
-                        <|
-                            child
-
-                _ ->
-                    e
-    }
-
-
-{-| Add basic line input design
--}
-basicLineInput : Plugin msg
-basicLineInput =
-    { renderPoint =
-        \e ->
-            case e of
-                LineInput msg value ->
-                    el { defaultElAttributes | padding = 1, backgroundColor = "#00458f", rounding = 24 } <|
-                        el { defaultElAttributes | padding = 5, backgroundColor = "white", fontColor = "black", rounding = 24 } <|
-                            LineInput msg value
-
-                _ ->
-                    e
-    }
+--{-| Renders empty text extra
+---}
+--superTextRenderer : Plugin msg
+--superTextRenderer =
+--    { renderPoint =
+--        \e ->
+--            case e of
+--                Text txt ->
+--                    if String.length txt > 50 then
+--                        row [ text <| String.slice 0 50 txt, text "..." ]
+--
+--                    else if String.isEmpty txt then
+--                        el { defaultElAttributes | fontColor = "rgba(0,0,0,0.5)" } <| text "(empty)"
+--
+--                    else
+--                        text txt
+--
+--                _ ->
+--                    e
+--    }
+--
+--
+--{-| Rounds everything
+---}
+--superRounder : Plugin msg
+--superRounder =
+--    { renderPoint =
+--        \e ->
+--            case e of
+--                El attr (El attr2 child) ->
+--                    case attr.rounding of
+--                        0 ->
+--                            el { attr | rounding = attr2.rounding + attr.padding } <| el attr2 child
+--
+--                        _ ->
+--                            e
+--
+--                El attr child ->
+--                    case attr.rounding of
+--                        0 ->
+--                            el { attr | rounding = 16 } child
+--
+--                        _ ->
+--                            e
+--
+--                _ ->
+--                    e
+--    }
+--
+--
+--{-| Add basic button design.
+--Has extra style for submit buttons.
+---}
+--basicButtons : Plugin msg
+--basicButtons =
+--    { renderPoint =
+--        \e ->
+--            case e of
+--                Button o child ->
+--                    Button o <|
+--                        el
+--                            { defaultElAttributes
+--                                | padding = 8
+--                                , backgroundColor = "#20252f"
+--                                , fontColor = "white"
+--                                , rounding = 24
+--                            }
+--                        <|
+--                            child
+--
+--                Tagged Submit (Button o (El _ child)) ->
+--                    Button o <|
+--                        el
+--                            { defaultElAttributes
+--                                | padding = 8
+--                                , backgroundColor = "#00458f"
+--                                , fontColor = "white"
+--                                , rounding = 24
+--                                , borderWidth = 2
+--                                , borderColor = "red"
+--                            }
+--                        <|
+--                            child
+--
+--                _ ->
+--                    e
+--    }
+--
+--
+--{-| Add basic line input design
+---}
+--basicLineInput : Plugin msg
+--basicLineInput =
+--    { renderPoint =
+--        \e ->
+--            case e of
+--                LineInput msg value ->
+--                    el { defaultElAttributes | padding = 1, backgroundColor = "#00458f", rounding = 24 } <|
+--                        el { defaultElAttributes | padding = 5, backgroundColor = "white", fontColor = "black", rounding = 24 } <|
+--                            LineInput msg value
+--
+--                _ ->
+--                    e
+--    }
 
 
 {-| Add tabs
