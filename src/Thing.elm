@@ -1,6 +1,6 @@
 module Thing exposing
     ( Element(..)
-    , HtmlConfig, Model, Msg(..), Plugin, PluginMsg(..), RenderPoint, Tag(..), button, col, defaultElAttributes, el, init, lineInput, row, tagged, text, toHtml, update
+    , HtmlConfig, Model, Msg(..), Plugin, PluginMsg(..), RenderPoint, Tag(..), button, col, defaultElAttributes, el, fixedSpacer, flexSpacer, init, lineInput, row, stack, tagged, text, toHtml, update
     )
 
 {-| This library is the implementation and interface for an abstract UI.
@@ -38,6 +38,9 @@ type Element msg
     | Button msg (Element msg)
     | LineInput (String -> msg) String
     | Tagged Tag (Element msg)
+    | FlexSpacer
+    | FixedSpacer Int
+    | Stack (List (Element msg))
 
 
 
@@ -46,17 +49,37 @@ type Element msg
 
 type alias ElAttributes =
     { fontColor : String
+    , fontSize : Int
     , backgroundColor : String
+    , backgroundImage : String
     , padding : Int
     , rounding : Int
     , borderColor : String
     , borderWidth : Int
+    , borderStyle : String
+    }
+
+
+defaultElAttributes : ElAttributes
+defaultElAttributes =
+    { fontColor = "black"
+    , fontSize = 16
+    , backgroundColor = "transparent"
+    , backgroundImage = "none"
+    , padding = 0
+    , rounding = 0
+    , borderColor = "black"
+    , borderWidth = 0
+    , borderStyle = "solid"
     }
 
 
 type Tag
     = Submit
     | Cancle
+    | Active
+    | Inactive
+    | Disabled
       -- inspired by shadcn components
       -- https://ui.shadcn.com/docs/components
     | Accordion
@@ -115,17 +138,6 @@ type Tag
     | Tooltip
 
 
-defaultElAttributes : ElAttributes
-defaultElAttributes =
-    { fontColor = "black"
-    , backgroundColor = "white"
-    , padding = 0
-    , rounding = 0
-    , borderColor = "black"
-    , borderWidth = 0
-    }
-
-
 type alias HtmlConfig msg =
     { plugins : List (Plugin msg)
     , intoMsg : Msg -> msg
@@ -135,13 +147,17 @@ type alias HtmlConfig msg =
 type alias Plugin msg =
     { renderPoint : RenderPoint msg
     , name : String
-
-    --, init : pluginModel
+    , init : PluginModel
+    , update : String -> PluginModel -> PluginModel
     }
 
 
+type alias PluginModel =
+    Dict String String
+
+
 type alias RenderPoint msg =
-    Element (PluginMsg msg) -> Element (PluginMsg msg)
+    PluginModel -> Element (PluginMsg msg) -> Element (PluginMsg msg)
 
 
 type PluginMsg msg
@@ -172,8 +188,8 @@ init =
     { hovering = Dict.empty, pluginModels = Dict.empty }
 
 
-update : Msg -> Model -> Model
-update msg model =
+update : HtmlConfig msg -> Msg -> Model -> Model
+update conf msg model =
     case msg of
         NoOp ->
             model
@@ -184,14 +200,23 @@ update msg model =
         UnHover key ->
             { model | hovering = Dict.remove key model.hovering }
 
-        PluginEvent string string2 ->
+        PluginEvent pluginName eventName ->
             -- TODO do stuff
             let
-                _ =
-                    Debug.log "event"
-                        string2
+                u =
+                    conf.plugins |> List.filter (\p -> p.name == pluginName) |> List.head
+
+                -- TODO this could be nicer build
+                m =
+                    model.pluginModels |> Dict.get pluginName |> Maybe.withDefault (u |> Maybe.map .init |> Maybe.withDefault Dict.empty)
             in
-            model
+            case ( u, m ) of
+                ( Just plugin, pluginModel ) ->
+                    { model | pluginModels = model.pluginModels |> Dict.insert pluginName (plugin.update eventName pluginModel) }
+
+                -- Plugin not found?
+                _ ->
+                    model
 
 
 mapMsg : (a -> b) -> Element a -> Element b
@@ -221,6 +246,15 @@ mapMsg func element =
         Tagged tag child ->
             Tagged tag (mapMsg func child)
 
+        FlexSpacer ->
+            FlexSpacer
+
+        FixedSpacer px ->
+            FixedSpacer px
+
+        Stack children ->
+            Stack (List.map (mapMsg func) children)
+
 
 toHtml : HtmlConfig msg -> Model -> Element msg -> Html.Html msg
 toHtml config model preElement =
@@ -231,21 +265,24 @@ toHtml config model preElement =
                 |> List.foldl
                     (\item acc ->
                         preProcess
-                            item.renderPoint
+                            (\og ->
+                                item.renderPoint (model.pluginModels |> Dict.get item.name |> Maybe.withDefault item.init) (mapMsg External og)
+                                    |> mapMsg
+                                        (\x ->
+                                            case x of
+                                                External m ->
+                                                    m
+
+                                                PluginM m ->
+                                                    config.intoMsg (PluginEvent item.name m)
+                                        )
+                            )
                             acc
                     )
-                    (mapMsg (\x -> External x) preElement)
-                |> mapMsg
-                    (\x ->
-                        case x of
-                            External m ->
-                                m
+                    preElement
 
-                            PluginM m ->
-                                config.intoMsg (PluginEvent "TODO" m)
-                    )
-
-        preProcess : RenderPoint a -> Element (PluginMsg a) -> Element (PluginMsg a)
+        --(mapMsg (\x -> External x) preElement)
+        preProcess : (Element a -> Element a) -> Element a -> Element a
         preProcess func element =
             func <|
                 case element of
@@ -273,6 +310,15 @@ toHtml config model preElement =
                     Tagged tag child ->
                         Tagged tag (preProcess func child)
 
+                    FlexSpacer ->
+                        FlexSpacer
+
+                    FixedSpacer px ->
+                        FixedSpacer px
+
+                    Stack children ->
+                        Stack (children |> List.map (preProcess func))
+
         render : Element msg -> String -> Html.Html msg
         render element key =
             let
@@ -292,13 +338,15 @@ toHtml config model preElement =
                 El attr child ->
                     Html.div
                         ([ style "color" attr.fontColor
+                         , style "font-size" (String.fromInt attr.fontSize ++ "px")
                          , style "background-color" attr.backgroundColor
+                         , style "background-image" attr.backgroundImage
                          , style "padding" (String.fromInt attr.padding ++ "px")
                          , style "border-radius" (String.fromInt attr.rounding ++ "px")
-                         , style "display" "flex"
                          , style "border-color" attr.borderColor
                          , style "border-width" (String.fromInt attr.borderWidth ++ "px")
-                         , style "border-style" "solid"
+                         , style "border-style" attr.borderStyle
+                         , class "el"
                          , Html.Events.onMouseEnter (config.intoMsg <| Hover key)
                          , Html.Events.onMouseLeave (config.intoMsg <| UnHover key)
                          ]
@@ -312,24 +360,33 @@ toHtml config model preElement =
                         [ render child (key ++ "/el") ]
 
                 Row children ->
-                    Html.div [ style "display" "flex", style "gap" "16px" ]
+                    Html.div [ class "row" ]
                         (List.indexedMap renderIndex children)
 
                 Col children ->
-                    Html.div [ style "display" "flex", style "gap" "16px", style "flex-direction" "column" ]
+                    Html.div [ class "col" ]
                         (List.indexedMap renderIndex children)
 
                 Button onClick child ->
                     Html.button [ Html.Events.onClick onClick ] [ render child (key ++ "/button") ]
 
                 LineInput onChange str ->
-                    Html.input [ Html.Events.onInput onChange, Html.Attributes.value str ] []
+                    Html.input [ Html.Events.onInput onChange, Html.Attributes.value str, style "flex-grow" "1" ] []
 
                 -- Tags are not rendered
                 Tagged _ child ->
                     render child (key ++ "/tagged")
+
+                FlexSpacer ->
+                    Html.div [ class "flex-spacer" ] []
+
+                FixedSpacer px ->
+                    Html.div [ style "width" <| String.fromInt px ++ "px", style "height" <| String.fromInt px ++ "px" ] []
+
+                Stack children ->
+                    Html.div [ class "stack" ] (List.indexedMap renderIndex children)
     in
-    Html.div []
+    Html.div [ style "width" "100vw", style "height" "100vh", style "display" "flex", style "flex-direction" "column" ]
         [ cssReset
         , render postElement "root"
         ]
@@ -370,14 +427,66 @@ tagged tag =
     Tagged tag
 
 
+flexSpacer : Element msg
+flexSpacer =
+    FlexSpacer
+
+
+fixedSpacer : Int -> Element msg
+fixedSpacer px =
+    FixedSpacer px
+
+
+stack : List (Element msg) -> Element msg
+stack children =
+    Stack children
+
+
 style : String -> String -> Html.Attribute msg
 style name value =
     Html.Attributes.style name value
 
 
+class : String -> Html.Attribute msg
+class name =
+    Html.Attributes.class name
+
+
+css : String
+css =
+    """
+.row,.col,.el,.stack {
+    display: flex;
+}
+.col {
+    flex-direction: column;
+    height: 100%;
+}
+.row>.col:has(.flex-spacer) {
+   flex-grow: 1;
+}
+--.col>.row:has(>.flex-spacer) {
+--   flex-grow: 1;
+--}
+.stack {
+    display: grid;
+}
+.stack>* {
+    grid-row: 1;
+    grid-column: 1;
+}
+.stack:has(.flex-spacer) {
+    flex-grow: 1;
+}
+.flex-spacer {
+    flex-grow: 1;
+}
+"""
+
+
 cssReset : Html.Html msg
 cssReset =
-    Html.node "style" [] [ Html.text """
+    Html.node "style" [] [ Html.text <| """
     
 /* http://meyerweb.com/eric/tools/css/reset/ 
    v2.0 | 20110126
@@ -494,11 +603,14 @@ button, input {
 
 button {
     cursor: pointer;
+    padding: 0;
 }
-
 
 * {
     outline: 0px solid white;
     transition: outline 250ms;
+
 }
-""" ]
+
+
+""" ++ css ]
