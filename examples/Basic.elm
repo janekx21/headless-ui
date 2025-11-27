@@ -13,6 +13,9 @@ type alias Model =
     , thingModel : Thing.Model
     , chat : List ( String, String )
     , chatMessage : String
+    , plugins : List (Plugin Msg)
+    , deactivatedPlugins : List (Plugin Msg)
+    , showPlugins : Bool
     }
 
 
@@ -21,6 +24,8 @@ type Msg
     | ThingMsg Thing.Msg
     | ChangeChatMessage String
     | SendChatMessage
+    | TogglePlugin (Plugin Msg)
+    | ToggleShowPlugins
     | NoOp
 
 
@@ -34,7 +39,15 @@ main =
 
 init : Model
 init =
-    { username = "", password = "", thingModel = Thing.init, chat = [], chatMessage = "" }
+    { username = ""
+    , password = ""
+    , thingModel = Thing.init
+    , chat = []
+    , chatMessage = ""
+    , plugins = plugins
+    , deactivatedPlugins = []
+    , showPlugins = False
+    }
 
 
 update : Msg -> Model -> Model
@@ -47,7 +60,7 @@ update msg model =
             { model | username = username }
 
         ThingMsg m ->
-            { model | thingModel = Thing.update conf m model.thingModel }
+            { model | thingModel = Thing.update (conf model.plugins) m model.thingModel }
 
         ChangeChatMessage s ->
             { model | chatMessage = s }
@@ -59,27 +72,38 @@ update msg model =
             else
                 model
 
+        TogglePlugin plugin ->
+            if model.plugins |> List.member plugin then
+                { model | plugins = model.plugins |> List.Extra.remove plugin, deactivatedPlugins = plugin :: model.deactivatedPlugins }
 
-conf =
-    { plugins =
-        [ -- superRounder
-          superTextRenderer
+            else
+                { model | deactivatedPlugins = model.deactivatedPlugins |> List.Extra.remove plugin, plugins = plugin :: model.plugins }
 
-        --, basicLineInput
-        , tabPlugin
-        , basicButtons
-        , basicLineInput
-        , superRounder
-        , debugSpace
-        , tabbedExtra
-        , i18n
-            [ ( "Hello", "Hallo" )
-            , ( "World", "Welt" )
-            , ( "Please sign in", "Bitte einloggen" )
-            , ( "Username", "Benutzername" )
-            , ( "Password", "Passwort" )
-            ]
+        ToggleShowPlugins ->
+            { model | showPlugins = not model.showPlugins }
+
+
+plugins =
+    [ superTextRenderer
+    , headingPlugin
+    , tabPlugin
+    , basicButtons
+    , basicLineInput
+    , superRounder
+    , debugSpace
+    , tabbedExtra
+    , i18n
+        [ ( "Hello", "Hallo" )
+        , ( "World", "Welt" )
+        , ( "Please sign in", "Bitte einloggen" )
+        , ( "Username", "Benutzername" )
+        , ( "Password", "Passwort" )
         ]
+    ]
+
+
+conf p =
+    { plugins = p
     , intoMsg = ThingMsg
     }
 
@@ -87,31 +111,54 @@ conf =
 view : Model -> Html.Html Msg
 view model =
     toHtml
-        conf
+        (conf model.plugins)
         model.thingModel
     <|
-        tagged Tabs <|
-            row
-                [ col
-                    [ text "Rect demo"
-                    , row
-                        [ text "Hello"
-                        , fixedSpacer 64
-                        , el { defaultElAttributes | fontColor = "red", backgroundColor = "black" } <| text "World"
-                        , el { defaultElAttributes | padding = 20 } <| col [ text "A", text "B", button NoOp <| text "C" ]
-                        , flexSpacer
-                        , button NoOp <| col [ text "1", text "2", candy <| candy <| text "Hi" ]
-                        , el { defaultElAttributes | backgroundColor = "red", padding = 8 } <|
-                            el { defaultElAttributes | fontColor = "red", backgroundColor = "black", padding = 4 } <|
-                                text "Janek"
+        stack
+            [ tagged Tabs <|
+                row
+                    [ col [ aboutUs ]
+                    , col
+                        [ text "Rect demo"
+                        , row
+                            [ text "Hello"
+                            , fixedSpacer 64
+                            , el { defaultElAttributes | fontColor = "red", backgroundColor = "black" } <| text "World"
+                            , el { defaultElAttributes | padding = 20 } <| col [ text "A", text "B", button NoOp <| text "C" ]
+                            , flexSpacer
+                            , button NoOp <| col [ text "1", text "2", candy <| candy <| text "Hi" ]
+                            , el { defaultElAttributes | backgroundColor = "red", padding = 8 } <|
+                                el { defaultElAttributes | fontColor = "red", backgroundColor = "black", padding = 4 } <|
+                                    text "Janek"
+                            ]
+                        , Stack [ text "Hell", text "Wooooorld", el { defaultElAttributes | padding = 8 } <| text "!" ]
                         ]
-                    , Stack [ text "Hell", text "Wooooorld", el { defaultElAttributes | padding = 8 } <| text "!" ]
+                    , col [ text "Login Page", viewLogin model ]
+                    , col [ text "Chat Example", viewChat model ]
+                    , col [ text "Another Page" ]
                     ]
-                , col [ text "Login Page", viewLogin model ]
-                , col [ text "Chat Example", viewChat model ]
-                , text "Another Page"
-                , col [ text "About us" ]
+            , viewPlugins model
+            ]
+
+
+viewPlugins model =
+    row
+        [ flexSpacer
+        , if model.showPlugins then
+            col
+                [ button ToggleShowPlugins <| text "> Hide"
+                , fixedSpacer 16
+                , col <|
+                    List.intersperse (FixedSpacer 4)
+                        (model.plugins |> List.map (\p -> button (TogglePlugin p) <| text p.name))
+                , col <| List.intersperse (FixedSpacer 4) (model.deactivatedPlugins |> List.map (\p -> tagged Inactive <| button (TogglePlugin p) <| text p.name))
                 ]
+
+          else
+            col
+                [ button ToggleShowPlugins <| text "<"
+                ]
+        ]
 
 
 viewLogin model =
@@ -120,16 +167,21 @@ viewLogin model =
         , row
             [ flexSpacer
             , el { defaultElAttributes | padding = 8, backgroundColor = "#c79cdc", rounding = 16 } <|
-                col
-                    [ row [ text "Please sign in ", fixedSpacer 8, text model.username ]
-                    , row [ col [ flexSpacer, text "Username", flexSpacer ], lineInput ChangeUsername model.username ]
-                    , row [ text "Password", lineInput ChangeUsername model.username ]
-                    , button NoOp <| text "Login"
-                    ]
+                col <|
+                    List.intersperse (FixedSpacer 8)
+                        [ row [ text "Please sign in ", fixedSpacer 8, text model.username ]
+                        , row [ verticalCenter <| text "Username", lineInput ChangeUsername model.username ]
+                        , row [ verticalCenter <| text "Password", lineInput ChangeUsername model.username ]
+                        , button NoOp <| text "Login"
+                        ]
             , flexSpacer
             ]
         , flexSpacer
         ]
+
+
+verticalCenter inner =
+    col [ flexSpacer, inner, flexSpacer ]
 
 
 viewChat model =
@@ -149,6 +201,48 @@ candy =
         << el { defaultElAttributes | backgroundColor = "orange", padding = 2 }
 
 
+aboutUs =
+    headingParagraph "About Us (Level 1)" <|
+        col
+            [ text "The following text has the Main Title: The Art of Morning Routines"
+
+            --, headingParagraph "" <|  text "Yes lets talks about something."
+            , headingParagraph "Chapter 1: Understanding Your Natural Rhythm" <|
+                col
+                    [ headingParagraph "The Science of Circadian Cycles" <|
+                        col
+                            [ headingParagraph "How Light Affects Your Wake-Up Time" <|
+                                col
+                                    [ text "Your body's internal clock responds powerfully to light exposure. When sunlight enters your eyes in the morning, it triggers a cascade of hormonal responses that help you feel alert and energized. This natural process has been fine-tuned over millions of years of human evolution."
+                                    ]
+                            , headingParagraph "The Role of Cortisol in Morning Energy" <|
+                                col
+                                    [ text "Cortisol, often called the stress hormone, actually plays a beneficial role in your morning routine. It naturally peaks about 30 minutes after waking, helping you transition from sleep to active consciousness. Understanding this rhythm can help you time your activities more effectively."
+                                    ]
+                            , headingParagraph "Creating Consistency in Your Schedule" <|
+                                col
+                                    [ text "Building a consistent wake-up time helps stabilize your circadian rhythm. Even on weekends, maintaining similar sleep and wake times can improve your overall energy levels and mood throughout the week."
+                                    ]
+                            ]
+                    ]
+            , headingParagraph "Chapter 2: Practical Morning Habits" <|
+                col
+                    [ headingParagraph "Movement and Exercise" <|
+                        col
+                            [ headingParagraph "Gentle Stretching Techniques" <| text "Starting with simple stretches can awaken your muscles and increase blood flow. Focus on major muscle groups like your back, legs, and shoulders to release overnight tension."
+                            , headingParagraph "The Benefits of Morning Walks" <| text "A brief walk outdoors combines light exposure, gentle exercise, and fresh air—three powerful elements that can set a positive tone for your entire day."
+                            ]
+                    ]
+            ]
+
+
+headingParagraph heading body =
+    col
+        [ tagged Heading <| text heading
+        , body
+        ]
+
+
 
 --User Plugins
 
@@ -164,7 +258,7 @@ superTextRenderer =
         \_ e ->
             case e of
                 Text txt ->
-                    if String.length txt > 50 then
+                    if String.length txt > 50 && String.length txt < 100 then
                         row [ text <| String.slice 0 50 txt, text "..." ]
 
                     else if String.isEmpty txt then
@@ -460,6 +554,76 @@ tabbedExtra =
                 --    C
                 Tagged Tabs (Col [ Row navItems, page ]) ->
                     tagged Tabs <| row [ col navItems, page ]
+
+                _ ->
+                    e
+    }
+
+
+{-| Adds heading levels
+-}
+headingPlugin : Plugin msg
+headingPlugin =
+    { name = "Heading Plugin"
+    , init = Dict.empty
+    , update = \_ _ -> Dict.empty
+    , renderPoint =
+        \_ e ->
+            let
+                countHeading : Element x -> Int
+                countHeading el =
+                    case el of
+                        Col ((Tagged Heading _) :: rest) ->
+                            (rest |> List.map countHeading |> List.maximum |> Maybe.withDefault 0) + 1
+
+                        Text _ ->
+                            0
+
+                        None ->
+                            0
+
+                        El _ child ->
+                            countHeading child
+
+                        Row children ->
+                            children |> List.map countHeading |> List.maximum |> Maybe.withDefault 0
+
+                        Col children ->
+                            children |> List.map countHeading |> List.maximum |> Maybe.withDefault 0
+
+                        Button _ child ->
+                            countHeading child
+
+                        LineInput _ _ ->
+                            0
+
+                        Tagged _ child ->
+                            countHeading child
+
+                        FlexSpacer ->
+                            0
+
+                        FixedSpacer _ ->
+                            0
+
+                        Stack children ->
+                            children |> List.map countHeading |> List.maximum |> Maybe.withDefault 0
+            in
+            case e of
+                Col [ Tagged Heading (Text headingLabel), body ] ->
+                    let
+                        level =
+                            4 - countHeading body
+                    in
+                    col
+                        [ tagged Heading <| el { defaultElAttributes | fontSize = 32 - level * 4 } <| text headingLabel
+
+                        --, text <| String.fromInt level
+                        , fixedSpacer <| 48 - level * 8
+
+                        --, el { defaultElAttributes | padding = 16 } <|
+                        , body
+                        ]
 
                 _ ->
                     e

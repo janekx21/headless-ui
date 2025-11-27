@@ -80,6 +80,8 @@ type Tag
     | Active
     | Inactive
     | Disabled
+      --
+    | Heading
       -- inspired by shadcn components
       -- https://ui.shadcn.com/docs/components
     | Accordion
@@ -480,6 +482,12 @@ css =
 }
 .flex-spacer {
     flex-grow: 1;
+}
+.flex-spacer,.row,.col,.stack {
+    pointer-events: none;
+}
+button,input {
+    pointer-events: all;
 }
 """
 
