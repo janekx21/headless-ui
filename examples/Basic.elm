@@ -458,7 +458,7 @@ tabPlugin =
                                                     Inactive
                                                 )
                                             <|
-                                                button (PluginM (String.fromInt i)) <|
+                                                button (pluginEvent (String.fromInt i)) <|
                                                     text (findText c |> Maybe.withDefault (String.fromInt i))
                                         )
                                         children

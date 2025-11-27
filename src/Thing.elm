@@ -1,6 +1,7 @@
 module Thing exposing
     ( Element(..)
-    , HtmlConfig, Model, Msg(..), Plugin, PluginMsg(..), RenderPoint, Tag(..), button, col, defaultElAttributes, el, fixedSpacer, flexSpacer, init, lineInput, row, stack, tagged, text, toHtml, update
+    , Plugin
+    , Model, Msg(..), RenderPoint, Tag(..), button, col, defaultElAttributes, el, fixedSpacer, flexSpacer, init, lineInput, pluginEvent, row, stack, tagged, text, toHtml, update
     )
 
 {-| This library is the implementation and interface for an abstract UI.
@@ -9,6 +10,8 @@ module Thing exposing
 # Element Definition
 
 @docs Element
+
+@docs Plugin
 
 -}
 
@@ -165,6 +168,11 @@ type alias RenderPoint msg =
 type PluginMsg msg
     = PluginM String
     | External msg
+
+
+pluginEvent : String -> PluginMsg msg
+pluginEvent str =
+    PluginM str
 
 
 
