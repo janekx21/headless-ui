@@ -44,8 +44,25 @@ init =
     , thingModel = Thing.init
     , chat = []
     , chatMessage = ""
-    , plugins = plugins
-    , deactivatedPlugins = []
+    , plugins =
+        [ superTextRenderer
+        , headingPlugin
+        , tabPlugin
+        , basicButtons
+        , basicLineInput
+        , superRounder
+        , tabbedExtra
+        , i18n
+            [ ( "Hello", "Hallo" )
+            , ( "World", "Welt" )
+            , ( "Please sign in", "Bitte einloggen" )
+            , ( "Username", "Benutzername" )
+            , ( "Password", "Passwort" )
+            ]
+        ]
+    , deactivatedPlugins =
+        [ debugSpace
+        ]
     , showPlugins = False
     }
 
@@ -60,7 +77,16 @@ update msg model =
             { model | username = username }
 
         ThingMsg m ->
-            { model | thingModel = Thing.update (conf model.plugins) m model.thingModel }
+            let
+                c =
+                    conf model.plugins
+            in
+            case c of
+                Ok co ->
+                    { model | thingModel = Thing.update co m model.thingModel }
+
+                Err _ ->
+                    model
 
         ChangeChatMessage s ->
             { model | chatMessage = s }
@@ -77,68 +103,55 @@ update msg model =
                 { model | plugins = model.plugins |> List.Extra.remove plugin, deactivatedPlugins = plugin :: model.deactivatedPlugins }
 
             else
-                { model | deactivatedPlugins = model.deactivatedPlugins |> List.Extra.remove plugin, plugins = plugin :: model.plugins }
+                { model | deactivatedPlugins = model.deactivatedPlugins |> List.Extra.remove plugin, plugins = model.plugins ++ [ plugin ] }
 
         ToggleShowPlugins ->
             { model | showPlugins = not model.showPlugins }
 
 
-plugins =
-    [ superTextRenderer
-    , headingPlugin
-    , tabPlugin
-    , basicButtons
-    , basicLineInput
-    , superRounder
-    , debugSpace
-    , tabbedExtra
-    , i18n
-        [ ( "Hello", "Hallo" )
-        , ( "World", "Welt" )
-        , ( "Please sign in", "Bitte einloggen" )
-        , ( "Username", "Benutzername" )
-        , ( "Password", "Passwort" )
-        ]
-    ]
-
-
 conf p =
-    { plugins = p
-    , intoMsg = ThingMsg
-    }
+    initHtmlConfig p ThingMsg
 
 
 view : Model -> Html.Html Msg
 view model =
-    toHtml
-        (conf model.plugins)
-        model.thingModel
-    <|
-        stack
-            [ tagged Tabs <|
-                row
-                    [ col [ aboutUs ]
-                    , col
-                        [ text "Rect demo"
-                        , row
-                            [ text "Hello"
-                            , fixedSpacer 64
-                            , el { defaultElAttributes | fontColor = "red", backgroundColor = "black" } <| text "World"
-                            , el { defaultElAttributes | padding = 20 } <| col [ text "A", text "B", button NoOp <| text "C" ]
-                            , flexSpacer
-                            , button NoOp <| col [ text "1", text "2", candy <| candy <| text "Hi" ]
-                            , el { defaultElAttributes | backgroundColor = "red", padding = 8 } <|
-                                el { defaultElAttributes | fontColor = "red", backgroundColor = "black", padding = 4 } <|
-                                    text "Janek"
+    let
+        c =
+            conf model.plugins
+    in
+    case c of
+        Ok co ->
+            toHtml co
+                model.thingModel
+            <|
+                stack
+                    [ tagged Tabs <|
+                        row
+                            [ col [ aboutUs ]
+                            , col
+                                [ text "Rect demo"
+                                , row
+                                    [ text "Hello"
+                                    , fixedSpacer 64
+                                    , el { defaultElAttributes | fontColor = "red", backgroundColor = "black" } <| text "World"
+                                    , el { defaultElAttributes | padding = 20 } <| col [ text "A", text "B", button NoOp <| text "C" ]
+                                    , flexSpacer
+                                    , button NoOp <| col [ text "1", text "2", candy <| candy <| text "Hi" ]
+                                    , el { defaultElAttributes | backgroundColor = "red", padding = 8 } <|
+                                        el { defaultElAttributes | fontColor = "red", backgroundColor = "black", padding = 4 } <|
+                                            text "Janek"
+                                    ]
+                                , Stack [ text "Hell", text "Wooooorld", el { defaultElAttributes | padding = 8 } <| text "!" ]
+                                ]
+                            , col [ text "Login Page", viewLogin model ]
+                            , col [ text "Chat Example", viewChat model ]
+                            , col [ text "Another Page" ]
                             ]
-                        , Stack [ text "Hell", text "Wooooorld", el { defaultElAttributes | padding = 8 } <| text "!" ]
-                        ]
-                    , col [ text "Login Page", viewLogin model ]
-                    , col [ text "Chat Example", viewChat model ]
-                    , col [ text "Another Page" ]
+                    , viewPlugins model
                     ]
-            , viewPlugins model
-            ]
+
+        Err error ->
+            viewConfigError error
 
 
 viewPlugins model =
@@ -202,38 +215,40 @@ candy =
 
 
 aboutUs =
-    headingParagraph "About Us (Level 1)" <|
-        col
-            [ text "The following text has the Main Title: The Art of Morning Routines"
+    col
+        [ headingParagraph "About Us (Level 1)" <|
+            col
+                [ text "The following text has the Main Title: The Art of Morning Routines"
 
-            --, headingParagraph "" <|  text "Yes lets talks about something."
-            , headingParagraph "Chapter 1: Understanding Your Natural Rhythm" <|
-                col
-                    [ headingParagraph "The Science of Circadian Cycles" <|
-                        col
-                            [ headingParagraph "How Light Affects Your Wake-Up Time" <|
-                                col
-                                    [ text "Your body's internal clock responds powerfully to light exposure. When sunlight enters your eyes in the morning, it triggers a cascade of hormonal responses that help you feel alert and energized. This natural process has been fine-tuned over millions of years of human evolution."
-                                    ]
-                            , headingParagraph "The Role of Cortisol in Morning Energy" <|
-                                col
-                                    [ text "Cortisol, often called the stress hormone, actually plays a beneficial role in your morning routine. It naturally peaks about 30 minutes after waking, helping you transition from sleep to active consciousness. Understanding this rhythm can help you time your activities more effectively."
-                                    ]
-                            , headingParagraph "Creating Consistency in Your Schedule" <|
-                                col
-                                    [ text "Building a consistent wake-up time helps stabilize your circadian rhythm. Even on weekends, maintaining similar sleep and wake times can improve your overall energy levels and mood throughout the week."
-                                    ]
-                            ]
-                    ]
-            , headingParagraph "Chapter 2: Practical Morning Habits" <|
-                col
-                    [ headingParagraph "Movement and Exercise" <|
-                        col
-                            [ headingParagraph "Gentle Stretching Techniques" <| text "Starting with simple stretches can awaken your muscles and increase blood flow. Focus on major muscle groups like your back, legs, and shoulders to release overnight tension."
-                            , headingParagraph "The Benefits of Morning Walks" <| text "A brief walk outdoors combines light exposure, gentle exercise, and fresh air—three powerful elements that can set a positive tone for your entire day."
-                            ]
-                    ]
-            ]
+                --, headingParagraph "" <|  text "Yes lets talks about something."
+                , headingParagraph "Chapter 1: Understanding Your Natural Rhythm" <|
+                    col
+                        [ headingParagraph "The Science of Circadian Cycles" <|
+                            col
+                                [ headingParagraph "How Light Affects Your Wake-Up Time" <|
+                                    col
+                                        [ text "Your body's internal clock responds powerfully to light exposure. When sunlight enters your eyes in the morning, it triggers a cascade of hormonal responses that help you feel alert and energized. This natural process has been fine-tuned over millions of years of human evolution."
+                                        ]
+                                , headingParagraph "The Role of Cortisol in Morning Energy" <|
+                                    col
+                                        [ text "Cortisol, often called the stress hormone, actually plays a beneficial role in your morning routine. It naturally peaks about 30 minutes after waking, helping you transition from sleep to active consciousness. Understanding this rhythm can help you time your activities more effectively."
+                                        ]
+                                , headingParagraph "Creating Consistency in Your Schedule" <|
+                                    col
+                                        [ text "Building a consistent wake-up time helps stabilize your circadian rhythm. Even on weekends, maintaining similar sleep and wake times can improve your overall energy levels and mood throughout the week."
+                                        ]
+                                ]
+                        ]
+                , headingParagraph "Chapter 2: Practical Morning Habits" <|
+                    col
+                        [ headingParagraph "Movement and Exercise" <|
+                            col
+                                [ headingParagraph "Gentle Stretching Techniques" <| text "Starting with simple stretches can awaken your muscles and increase blood flow. Focus on major muscle groups like your back, legs, and shoulders to release overnight tension."
+                                , headingParagraph "The Benefits of Morning Walks" <| text "A brief walk outdoors combines light exposure, gentle exercise, and fresh air—three powerful elements that can set a positive tone for your entire day."
+                                ]
+                        ]
+                ]
+        ]
 
 
 headingParagraph heading body =
@@ -269,6 +284,7 @@ superTextRenderer =
 
                 _ ->
                     e
+    , dependencies = []
     }
 
 
@@ -299,6 +315,7 @@ superRounder =
 
                 _ ->
                     e
+    , dependencies = []
     }
 
 
@@ -369,6 +386,7 @@ basicButtons =
 
                 _ ->
                     e
+    , dependencies = []
     }
 
 
@@ -389,6 +407,7 @@ basicLineInput =
 
                 _ ->
                     e
+    , dependencies = []
     }
 
 
@@ -477,6 +496,7 @@ tabPlugin =
 
                 Nothing ->
                     model
+    , dependencies = []
     }
 
 
@@ -516,6 +536,7 @@ debugSpace =
 
                 _ ->
                     e
+    , dependencies = []
     }
 
 
@@ -534,6 +555,7 @@ i18n dict =
 
                 _ ->
                     e
+    , dependencies = []
     }
 
 
@@ -557,6 +579,7 @@ tabbedExtra =
 
                 _ ->
                     e
+    , dependencies = [ tabPlugin.name ]
     }
 
 
@@ -627,4 +650,5 @@ headingPlugin =
 
                 _ ->
                     e
+    , dependencies = []
     }

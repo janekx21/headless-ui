@@ -1,17 +1,103 @@
 module Thing exposing
     ( Element(..)
+    , text
+    , row
+    , col
+    , stack
+    , el
+    , defaultElAttributes
+    , fixedSpacer
+    , flexSpacer
+    , button
+    , lineInput
+    , tagged
+    , Tag(..)
+    , toHtml
+    , init
+    , Model
+    , Msg(..)
+    , update
     , Plugin
-    , Model, Msg(..), RenderPoint, Tag(..), button, col, defaultElAttributes, el, fixedSpacer, flexSpacer, init, lineInput, pluginEvent, row, stack, tagged, text, toHtml, update
+    , RenderPoint
+    , pluginEvent
+    , initHtmlConfig, viewConfigError
     )
 
-{-| This library is the implementation and interface for an abstract UI.
+{-| This framework is the implementation and interface for an abstract UI.
+The framework can be extended with plugins.
+
+    view : Model -> Html.Html Msg
+    view model =
+        toHtml
+            { plugins =
+                [-- Place you plugins here
+                ]
+            , intoMsg = ThingMsg
+            }
+            model.thingModel
+        <|
+            row [ text "Here is some text in a row" ]
 
 
 # Element Definition
 
+Elements are the nodes of this framework. They are the building blocks.
+
+There are the following type of elements:
+
+  - None is no element at all. It will not be rendered at all.
+  - Text is just a label in the UI
+  - El is for styling
+  - Row & Col are rows and columns
+  - Button is a simple interactable that you can click
+  - LineInput is a single line text input
+  - Tagged is a node that has a special tag. Tags indicate element kinds.
+  - FlexSpacer is space that can grow
+  - FixedSpacer is space that has a fixed size
+  - Stack is a stack of elements on top of each other
+
 @docs Element
 
+
+## The following functions construct the elements.
+
+@docs text
+
+@docs row
+@docs col
+@docs stack
+
+@docs el
+
+`el` has a const set of default attributes.
+
+@docs defaultElAttributes
+
+@docs fixedSpacer
+@docs flexSpacer
+
+@docs button
+@docs lineInput
+
+@docs tagged
+@docs Tag
+
+@docs toHtml
+
+
+# Setup
+
+@docs init
+@docs Model
+@docs Msg
+@docs update
+
+
+# Plugins
+
 @docs Plugin
+@docs RenderPoint
+@docs pluginEvent
 
 -}
 
@@ -22,15 +108,6 @@ import Html.Events
 
 
 {-| Represents an abstract UI element. The type is completely exposed for modification purposes in the `Plugin` system.
-
-  - None is no element at all. It will not be rendered at all.
-  - Text is just a label in the UI
-  - El is for styling
-  - Row & Col are rows and columns
-  - Button is a simple interactable that you can click
-  - LineInput is a single line text input
-  - Tagged is a node that has a special tag. Tags indicate element kinds.
-
 -}
 type Element msg
     = None
@@ -63,6 +140,8 @@ type alias ElAttributes =
     }
 
 
+{-| The default attributes of an el element. Default color, font size, background etc.
+-}
 defaultElAttributes : ElAttributes
 defaultElAttributes =
     { fontColor = "black"
@@ -77,6 +156,8 @@ defaultElAttributes =
     }
 
 
+{-| A tag that you can place around your components to signal a use case
+-}
 type Tag
     = Submit
     | Cancle
@@ -149,18 +230,63 @@ type alias HtmlConfig msg =
     }
 
 
+initHtmlConfig : List (Plugin msg) -> (Msg -> msg) -> Result ConfigError (HtmlConfig msg)
+initHtmlConfig plugins intoMsg =
+    let
+        missingDependencies =
+            plugins
+                |> List.concatMap
+                    (\plugin ->
+                        plugin.dependencies
+                            |> List.filter
+                                (\dependencyName ->
+                                    not (plugins |> List.any (\otherPlugin -> otherPlugin.name == dependencyName))
+                                )
+                    )
+    in
+    if missingDependencies |> List.isEmpty then
+        Ok <|
+            { plugins = plugins
+            , intoMsg = intoMsg
+            }
+
+    else
+        Err <| DependenciesMissing missingDependencies
+
+
+type ConfigError
+    = DependenciesMissing (List String)
+
+
+viewConfigError : ConfigError -> Html.Html msg
+viewConfigError err =
+    case err of
+        DependenciesMissing missing ->
+            Html.div []
+                [ Html.text "Missing dependencies"
+                , Html.ul [] (missing |> List.map (\item -> Html.li [] [ Html.text item ]))
+                ]
+
+
+{-| A Plugin can add functionality to your application. They are developed independent of one another.
+-}
 type alias Plugin msg =
     { renderPoint : RenderPoint msg
     , name : String
     , init : PluginModel
     , update : String -> PluginModel -> PluginModel
+    , dependencies : List String
     }
 
 
+{-| The state of a single plugin is a key value store
+-}
 type alias PluginModel =
     Dict String String
 
 
+{-| The extension point/hot point of a plugin for rendering
+-}
 type alias RenderPoint msg =
     PluginModel -> Element (PluginMsg msg) -> Element (PluginMsg msg)
 
@@ -170,22 +296,23 @@ type PluginMsg msg
     | External msg
 
 
+{-| Create a plugin event. Use this inside plugins to send a message to the own plugin.
+-}
 pluginEvent : String -> PluginMsg msg
 pluginEvent str =
     PluginM str
 
 
-
---type alias UpatePoint =
---    Msg -> Msg
-
-
+{-| This is the internal state of the framework
+-}
 type alias Model =
     { hovering : Dict String Bool
     , pluginModels : Dict String (Dict String String)
     }
 
 
+{-| This is the internal message of the framework
+-}
 type Msg
     = NoOp
     | Hover String
@@ -193,11 +320,15 @@ type Msg
     | PluginEvent String String
 
 
+{-| Initializes the internal framework state
+-}
 init : Model
 init =
     { hovering = Dict.empty, pluginModels = Dict.empty }
 
 
+{-| This is the internal update function
+-}
 update : HtmlConfig msg -> Msg -> Model -> Model
 update conf msg model =
     case msg of
@@ -266,6 +397,8 @@ mapMsg func element =
             Stack (List.map (mapMsg func) children)
 
 
+{-| The main rendering function you will use
+-}
 toHtml : HtmlConfig msg -> Model -> Element msg -> Html.Html msg
 toHtml config model preElement =
     let
@@ -402,51 +535,71 @@ toHtml config model preElement =
         ]
 
 
+{-| An element that can style your application
+-}
 el : ElAttributes -> Element msg -> Element msg
 el attr child =
     El attr child
 
 
+{-| Some text
+-}
 text : String -> Element msg
 text str =
     Text str
 
 
+{-| A row of item
+-}
 row : List (Element msg) -> Element msg
 row children =
     Row children
 
 
+{-| A column of items
+-}
 col : List (Element msg) -> Element msg
 col children =
     Col children
 
 
+{-| An interactable that you can click on
+-}
 button : msg -> Element msg -> Element msg
 button onClick child =
     Button onClick child
 
 
+{-| An interactable single line of text
+-}
 lineInput : (String -> msg) -> String -> Element msg
 lineInput onChange str =
     LineInput onChange str
 
 
+{-| Add a tag to the inner element
+-}
 tagged : Tag -> Element msg -> Element msg
 tagged tag =
     Tagged tag
 
 
+{-| Some space that will dynamically grow
+-}
 flexSpacer : Element msg
 flexSpacer =
     FlexSpacer
 
 
+{-| Some fixed size space in px
+-}
 fixedSpacer : Int -> Element msg
 fixedSpacer px =
     FixedSpacer px
 
 
+{-| Some elements that are stacked on top of each other
+-}
 stack : List (Element msg) -> Element msg
 stack children =
     Stack children
