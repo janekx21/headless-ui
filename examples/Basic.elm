@@ -110,7 +110,7 @@ update msg model =
 
 
 conf p =
-    initHtmlConfig p ThingMsg
+    initConfig p ThingMsg
 
 
 view : Model -> Html.Html Msg
@@ -401,9 +401,15 @@ basicLineInput =
         \_ e ->
             case e of
                 LineInput msg value ->
-                    el { defaultElAttributes | padding = 1, backgroundColor = "#00458f", rounding = 24 } <|
-                        el { defaultElAttributes | padding = 5, backgroundColor = "white", fontColor = "black", rounding = 24 } <|
-                            LineInput msg value
+                    el
+                        { defaultElAttributes
+                            | padding = 8
+                            , rounding = 24
+                            , borderWidth = 1
+                            , borderColor = "#00458f"
+                        }
+                    <|
+                        LineInput msg value
 
                 _ ->
                     e

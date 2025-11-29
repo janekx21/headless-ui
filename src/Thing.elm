@@ -12,7 +12,10 @@ module Thing exposing
     , lineInput
     , tagged
     , Tag(..)
+    , none
     , toHtml
+    , initConfig
+    , viewConfigError
     , init
     , Model
     , Msg(..)
@@ -20,23 +23,77 @@ module Thing exposing
     , Plugin
     , RenderPoint
     , pluginEvent
-    , initHtmlConfig, viewConfigError
     )
 
 {-| This framework is the implementation and interface for an abstract UI.
 The framework can be extended with plugins.
 
+    import Plugin1
+    import Plugin2
+
+    config =
+        initConfig [ Plugin1.plugin, Plugin2.plugin { arg1 = "hi" } ] ThingMsg
+
     view : Model -> Html.Html Msg
     view model =
-        toHtml
-            { plugins =
-                [-- Place you plugins here
-                ]
-            , intoMsg = ThingMsg
-            }
-            model.thingModel
-        <|
+        -- ... check if config is ok
+        toHtml config model.thingModel <|
             row [ text "Here is some text in a row" ]
+
+The elements can be combined to crate some UI like this login form.
+
+    viewLogin model =
+        el { defaultElAttributes | padding = 8, backgroundColor = "#c79cdc", rounding = 16 } <|
+            col <|
+                List.intersperse (FixedSpacer 8)
+                    [ text "Please sign in"
+                    , row [ text "Username", lineInput ChangeUsername model.username ]
+                    , row [ text "Password", lineInput ChangePassword model.password ]
+                    , button Login <| text "Login"
+                    ]
+
+This first setups some style el then there is a column with 8px gap and then some form elements.
+
+    ╭─────────────────╮
+    │ Please sign in  │
+    │ Username ╭────╮ │
+    │          ╰────╯ │
+    │ Password ╭────╮ │
+    │          ╰────╯ │
+    │ ╭─────────────╮ │
+    │ │ Login       │ │
+    │ ╰─────────────╯ │
+    ╰─────────────────╯
+
+But this is nothing without plugins. Here is an example plugin that adds a very basic line input style.
+
+    {-| Add basic line input design
+    -}
+    basicLineInput : Plugin msg
+    basicLineInput =
+        { name = "Basic Line Input" -- It has a name
+        , init = Dict.empty -- No state
+        , update = \_ _ -> Dict.empty -- No update
+        , renderPoint =
+            \_ e ->
+                case e of
+                    -- Renders line inputs into el with a line input within
+                    LineInput msg value ->
+                        el
+                            { defaultElAttributes
+                                | padding = 8
+                                , rounding = 24
+                                , borderWidth = 1
+                                , borderColor = "#00458f"
+                            }
+                        <|
+                            LineInput msg value
+
+                    -- Ignores all other elements
+                    _ ->
+                        e
+        , dependencies = [] -- And has no dependencies
+        }
 
 
 # Element Definition
@@ -69,7 +126,7 @@ There are the following type of elements:
 
 @docs el
 
-`el` has a const set of default attributes.
+`el` has a fixed set of default attributes.
 
 @docs defaultElAttributes
 
@@ -82,7 +139,12 @@ There are the following type of elements:
 @docs tagged
 @docs Tag
 
+@docs none
+
 @docs toHtml
+
+@docs initConfig
+@docs viewConfigError
 
 
 # Setup
@@ -160,7 +222,7 @@ defaultElAttributes =
 -}
 type Tag
     = Submit
-    | Cancle
+    | Cancel
     | Active
     | Inactive
     | Disabled
@@ -224,14 +286,16 @@ type Tag
     | Tooltip
 
 
-type alias HtmlConfig msg =
+type alias Config msg =
     { plugins : List (Plugin msg)
     , intoMsg : Msg -> msg
     }
 
 
-initHtmlConfig : List (Plugin msg) -> (Msg -> msg) -> Result ConfigError (HtmlConfig msg)
-initHtmlConfig plugins intoMsg =
+{-| Creates and validates a framework config
+-}
+initConfig : List (Plugin msg) -> (Msg -> msg) -> Result ConfigError (Config msg)
+initConfig plugins intoMsg =
     let
         missingDependencies =
             plugins
@@ -258,6 +322,8 @@ type ConfigError
     = DependenciesMissing (List String)
 
 
+{-| Renders a config error
+-}
 viewConfigError : ConfigError -> Html.Html msg
 viewConfigError err =
     case err of
@@ -329,7 +395,7 @@ init =
 
 {-| This is the internal update function
 -}
-update : HtmlConfig msg -> Msg -> Model -> Model
+update : Config msg -> Msg -> Model -> Model
 update conf msg model =
     case msg of
         NoOp ->
@@ -399,7 +465,7 @@ mapMsg func element =
 
 {-| The main rendering function you will use
 -}
-toHtml : HtmlConfig msg -> Model -> Element msg -> Html.Html msg
+toHtml : Config msg -> Model -> Element msg -> Html.Html msg
 toHtml config model preElement =
     let
         postElement : Element msg
@@ -533,6 +599,13 @@ toHtml config model preElement =
         [ cssReset
         , render postElement "root"
         ]
+
+
+{-| No element
+-}
+none : Element msg
+none =
+    None
 
 
 {-| An element that can style your application
