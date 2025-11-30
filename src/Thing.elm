@@ -23,6 +23,7 @@ module Thing exposing
     , Plugin
     , RenderPoint
     , pluginEvent
+    , getPluginName, newPlugin
     )
 
 {-| This framework is the implementation and interface for an abstract UI.
@@ -301,11 +302,21 @@ initConfig plugins intoMsg =
             plugins
                 |> List.concatMap
                     (\plugin ->
-                        plugin.dependencies
-                            |> List.filter
-                                (\dependencyName ->
-                                    not (plugins |> List.any (\otherPlugin -> otherPlugin.name == dependencyName))
-                                )
+                        case plugin of
+                            Plugin pi ->
+                                pi.dependencies
+                                    |> List.filter
+                                        (\dependencyName ->
+                                            not
+                                                (plugins
+                                                    |> List.any
+                                                        (\otherPlugin ->
+                                                            case otherPlugin of
+                                                                Plugin piO ->
+                                                                    piO.name == dependencyName
+                                                        )
+                                                )
+                                        )
                     )
     in
     if missingDependencies |> List.isEmpty then
@@ -336,25 +347,27 @@ viewConfigError err =
 
 {-| A Plugin can add functionality to your application. They are developed independent of one another.
 -}
-type alias Plugin msg =
-    { renderPoint : RenderPoint msg
-    , name : String
-    , init : PluginModel
-    , update : String -> PluginModel -> PluginModel
-    , dependencies : List String
-    }
+type Plugin msg
+    = Plugin
+        { renderPoint : RenderPoint msg
+        , name : String
+        , update : String -> Plugin msg
+        , dependencies : List String
+        }
 
 
-{-| The state of a single plugin is a key value store
--}
-type alias PluginModel =
-    Dict String String
+newPlugin p =
+    Plugin p
+
+
+getPluginName (Plugin p) =
+    p.name
 
 
 {-| The extension point/hot point of a plugin for rendering
 -}
 type alias RenderPoint msg =
-    PluginModel -> Element (PluginMsg msg) -> Element (PluginMsg msg)
+    Element (PluginMsg msg) -> Element (PluginMsg msg)
 
 
 type PluginMsg msg
@@ -372,9 +385,7 @@ pluginEvent str =
 {-| This is the internal state of the framework
 -}
 type alias Model =
-    { hovering : Dict String Bool
-    , pluginModels : Dict String (Dict String String)
-    }
+    { hovering : Dict String Bool }
 
 
 {-| This is the internal message of the framework
@@ -390,40 +401,54 @@ type Msg
 -}
 init : Model
 init =
-    { hovering = Dict.empty, pluginModels = Dict.empty }
+    { hovering = Dict.empty }
 
 
 {-| This is the internal update function
 -}
-update : Config msg -> Msg -> Model -> Model
+update : Config msg -> Msg -> Model -> ( Model, List (Plugin msg) )
 update conf msg model =
     case msg of
         NoOp ->
-            model
+            ( model, conf.plugins )
 
         Hover key ->
-            { model | hovering = Dict.insert key True model.hovering }
+            ( { model | hovering = Dict.insert key True model.hovering }, conf.plugins )
 
         UnHover key ->
-            { model | hovering = Dict.remove key model.hovering }
+            ( { model | hovering = Dict.remove key model.hovering }, conf.plugins )
 
         PluginEvent pluginName eventName ->
-            -- TODO do stuff
             let
                 u =
-                    conf.plugins |> List.filter (\p -> p.name == pluginName) |> List.head
-
-                -- TODO this could be nicer build
-                m =
-                    model.pluginModels |> Dict.get pluginName |> Maybe.withDefault (u |> Maybe.map .init |> Maybe.withDefault Dict.empty)
+                    conf.plugins
+                        |> List.filter
+                            (\p ->
+                                case p of
+                                    Plugin pi ->
+                                        pi.name == pluginName
+                            )
+                        |> List.head
             in
-            case ( u, m ) of
-                ( Just plugin, pluginModel ) ->
-                    { model | pluginModels = model.pluginModels |> Dict.insert pluginName (plugin.update eventName pluginModel) }
+            case u of
+                Just (Plugin plugin) ->
+                    ( model
+                    , conf.plugins
+                        |> List.map
+                            (\p ->
+                                case p of
+                                    Plugin pi ->
+                                        if plugin.name == pi.name then
+                                            plugin.update eventName
+
+                                        else
+                                            p
+                            )
+                    )
 
                 -- Plugin not found?
                 _ ->
-                    model
+                    ( model, conf.plugins )
 
 
 mapMsg : (a -> b) -> Element a -> Element b
@@ -472,10 +497,10 @@ toHtml config model preElement =
         postElement =
             config.plugins
                 |> List.foldl
-                    (\item acc ->
+                    (\(Plugin item) acc ->
                         preProcess
                             (\og ->
-                                item.renderPoint (model.pluginModels |> Dict.get item.name |> Maybe.withDefault item.init) (mapMsg External og)
+                                item.renderPoint (mapMsg External og)
                                     |> mapMsg
                                         (\x ->
                                             case x of

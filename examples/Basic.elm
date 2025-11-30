@@ -47,7 +47,7 @@ init =
     , plugins =
         [ superTextRenderer
         , headingPlugin
-        , tabPlugin
+        , tabPlugin 0
         , basicButtons
         , basicLineInput
         , superRounder
@@ -83,7 +83,11 @@ update msg model =
             in
             case c of
                 Ok co ->
-                    { model | thingModel = Thing.update co m model.thingModel }
+                    let
+                        ( thingModel, pluginList ) =
+                            Thing.update co m model.thingModel
+                    in
+                    { model | thingModel = thingModel, plugins = pluginList }
 
                 Err _ ->
                     model
@@ -163,8 +167,13 @@ viewPlugins model =
                 , fixedSpacer 16
                 , col <|
                     List.intersperse (FixedSpacer 4)
-                        (model.plugins |> List.map (\p -> button (TogglePlugin p) <| text p.name))
-                , col <| List.intersperse (FixedSpacer 4) (model.deactivatedPlugins |> List.map (\p -> tagged Inactive <| button (TogglePlugin p) <| text p.name))
+                        (model.plugins
+                            |> List.map
+                                (\p ->
+                                    button (TogglePlugin p) <| text <| getPluginName p
+                                )
+                        )
+                , col <| List.intersperse (FixedSpacer 4) (model.deactivatedPlugins |> List.map (\p -> tagged Inactive <| button (TogglePlugin p) <| text <| getPluginName p))
                 ]
 
           else
@@ -262,15 +271,21 @@ headingParagraph heading body =
 --User Plugins
 
 
+pluginWithoutState name dependencies renderPoint =
+    newPlugin
+        { name = name
+        , update = \_ -> pluginWithoutState name dependencies renderPoint
+        , renderPoint = renderPoint
+        , dependencies = dependencies
+        }
+
+
 {-| Renders empty text extra
 -}
 superTextRenderer : Plugin msg
 superTextRenderer =
-    { name = "Super Text Renderer"
-    , init = Dict.empty
-    , update = \_ _ -> Dict.empty
-    , renderPoint =
-        \_ e ->
+    pluginWithoutState "Super Text Renderer" [] <|
+        \e ->
             case e of
                 Text txt ->
                     if String.length txt > 50 && String.length txt < 100 then
@@ -284,19 +299,14 @@ superTextRenderer =
 
                 _ ->
                     e
-    , dependencies = []
-    }
 
 
 {-| Rounds everything
 -}
 superRounder : Plugin msg
 superRounder =
-    { name = "Super Rounder"
-    , init = Dict.empty
-    , update = \_ _ -> Dict.empty
-    , renderPoint =
-        \_ e ->
+    pluginWithoutState "Super Rounder" [] <|
+        \e ->
             case e of
                 El attr (El attr2 child) ->
                     case attr.rounding of
@@ -315,8 +325,6 @@ superRounder =
 
                 _ ->
                     e
-    , dependencies = []
-    }
 
 
 {-| Add basic button design.
@@ -324,11 +332,11 @@ Has extra style for submit buttons.
 -}
 basicButtons : Plugin msg
 basicButtons =
-    { name = "Basic Buttons"
-    , init = Dict.empty
-    , update = \_ _ -> Dict.empty
-    , renderPoint =
-        \_ e ->
+    pluginWithoutState
+        "Basic Buttons"
+        []
+    <|
+        \e ->
             case e of
                 Button o child ->
                     Button o <|
@@ -386,19 +394,17 @@ basicButtons =
 
                 _ ->
                     e
-    , dependencies = []
-    }
 
 
 {-| Add basic line input design
 -}
 basicLineInput : Plugin msg
 basicLineInput =
-    { name = "Basic Line Input"
-    , init = Dict.empty
-    , update = \_ _ -> Dict.empty
-    , renderPoint =
-        \_ e ->
+    pluginWithoutState
+        "Basic Line Input"
+        []
+    <|
+        \e ->
             case e of
                 LineInput msg value ->
                     el
@@ -413,108 +419,99 @@ basicLineInput =
 
                 _ ->
                     e
-    , dependencies = []
-    }
 
 
 {-| Add tabs
 -}
-tabPlugin : Plugin msg
-tabPlugin =
-    { renderPoint =
-        \m e ->
-            let
-                index : Int
-                index =
-                    m
-                        |> Dict.get "index"
-                        |> Maybe.andThen String.toInt
-                        |> Maybe.withDefault 0
+tabPlugin : Int -> Plugin msg
+tabPlugin index =
+    newPlugin
+        { renderPoint =
+            \e ->
+                let
+                    findText : Element x -> Maybe String
+                    findText el =
+                        case el of
+                            Text txt ->
+                                Just txt
 
-                findText : Element x -> Maybe String
-                findText el =
-                    case el of
-                        Text txt ->
-                            Just txt
+                            None ->
+                                Nothing
 
-                        None ->
-                            Nothing
+                            El _ child ->
+                                findText child
 
-                        El _ child ->
-                            findText child
+                            Row children ->
+                                children |> List.filterMap findText |> List.head
 
-                        Row children ->
-                            children |> List.filterMap findText |> List.head
+                            Col children ->
+                                children |> List.filterMap findText |> List.head
 
-                        Col children ->
-                            children |> List.filterMap findText |> List.head
+                            Button _ child ->
+                                findText child
 
-                        Button _ child ->
-                            findText child
+                            LineInput _ str ->
+                                Just str
 
-                        LineInput _ str ->
-                            Just str
+                            Tagged _ child ->
+                                findText child
 
-                        Tagged _ child ->
-                            findText child
+                            FlexSpacer ->
+                                Nothing
 
-                        FlexSpacer ->
-                            Nothing
+                            FixedSpacer _ ->
+                                Nothing
 
-                        FixedSpacer _ ->
-                            Nothing
+                            Stack children ->
+                                children |> List.filterMap findText |> List.head
+                in
+                case e of
+                    Tagged Tabs (Row children) ->
+                        tagged Tabs <|
+                            col
+                                [ row <|
+                                    List.intersperse (FixedSpacer 8) <|
+                                        List.indexedMap
+                                            (\i c ->
+                                                tagged
+                                                    (if i == index then
+                                                        Active
 
-                        Stack children ->
-                            children |> List.filterMap findText |> List.head
-            in
-            case e of
-                Tagged Tabs (Row children) ->
-                    tagged Tabs <|
-                        col
-                            [ row <|
-                                List.intersperse (FixedSpacer 8) <|
-                                    List.indexedMap
-                                        (\i c ->
-                                            tagged
-                                                (if i == index then
-                                                    Active
+                                                     else
+                                                        Inactive
+                                                    )
+                                                <|
+                                                    button (pluginEvent (String.fromInt i)) <|
+                                                        text (findText c |> Maybe.withDefault (String.fromInt i))
+                                            )
+                                            children
+                                , List.Extra.getAt index children |> Maybe.withDefault None
+                                ]
 
-                                                 else
-                                                    Inactive
-                                                )
-                                            <|
-                                                button (pluginEvent (String.fromInt i)) <|
-                                                    text (findText c |> Maybe.withDefault (String.fromInt i))
-                                        )
-                                        children
-                            , List.Extra.getAt index children |> Maybe.withDefault None
-                            ]
+                    _ ->
+                        e
+        , name = "Tab Plugin"
+        , update =
+            \msg ->
+                case String.toInt msg of
+                    Just i ->
+                        tabPlugin i
 
-                _ ->
-                    e
-    , name = "Tab Plugin"
-    , init = Dict.empty |> Dict.insert "index" "0"
-    , update =
-        \msg model ->
-            case String.toInt msg of
-                Just i ->
-                    model |> Dict.insert "index" (String.fromInt i)
-
-                Nothing ->
-                    model
-    , dependencies = []
-    }
+                    Nothing ->
+                        tabPlugin index
+        , dependencies = []
+        }
 
 
 {-| Rounds everything
 -}
 debugSpace : Plugin msg
 debugSpace =
-    { name = "Debug Space"
-    , init = Dict.empty
-    , update = \_ _ -> Dict.empty
-    , renderPoint =
-        \_ e ->
+    pluginWithoutState
+        "Debug Space"
+        []
+    <|
+        \e ->
             case e of
                 FlexSpacer ->
                     stack
@@ -542,38 +539,34 @@ debugSpace =
 
                 _ ->
                     e
-    , dependencies = []
-    }
 
 
 {-| Translates everything
 -}
 i18n : List ( String, String ) -> Plugin msg
 i18n dict =
-    { name = "i18n"
-    , init = Dict.empty
-    , update = \_ _ -> Dict.empty
-    , renderPoint =
-        \_ e ->
+    pluginWithoutState
+        "i18n"
+        []
+    <|
+        \e ->
             case e of
                 Text txt ->
                     text <| List.foldl (\( k, v ) acc -> String.replace k v acc) txt dict
 
                 _ ->
                     e
-    , dependencies = []
-    }
 
 
 {-| Translates everything
 -}
 tabbedExtra : Plugin msg
 tabbedExtra =
-    { name = "Tabbed Extra"
-    , init = Dict.empty
-    , update = \_ _ -> Dict.empty
-    , renderPoint =
-        \_ e ->
+    pluginWithoutState
+        "Tabbed Extra"
+        [ "Tab Plugin" ]
+    <|
+        \e ->
             case e of
                 -- Rotates the nav bar vertical
                 -- From A B C
@@ -585,19 +578,17 @@ tabbedExtra =
 
                 _ ->
                     e
-    , dependencies = [ tabPlugin.name ]
-    }
 
 
 {-| Adds heading levels
 -}
 headingPlugin : Plugin msg
 headingPlugin =
-    { name = "Heading Plugin"
-    , init = Dict.empty
-    , update = \_ _ -> Dict.empty
-    , renderPoint =
-        \_ e ->
+    pluginWithoutState
+        "Heading Plugin"
+        []
+    <|
+        \e ->
             let
                 countHeading : Element x -> Int
                 countHeading el =
@@ -656,5 +647,3 @@ headingPlugin =
 
                 _ ->
                     e
-    , dependencies = []
-    }
