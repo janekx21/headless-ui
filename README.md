@@ -30,3 +30,16 @@ The Basic.elm example inclues the following plugins/features:
 - basicLineInput2
   - Replaces the style of basicLineInput with a simple border
   - Depends on basicLineInput
+
+Plugins/Features are added and removed while calling the "toHtml" function by chaning the Config struct. The Basic.elm example also uses buttons to add and remove plugins. Look for the "<" button in the top left.
+
+
+## Getting Started
+
+To run the Basic.elm example:
+
+- Clone the repositoy
+- Install elm
+- cd into headless-ui/examples
+- Run `elm reactor`
+- Open your browser at http://localhost:8000/Basic.elm
