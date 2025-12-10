@@ -421,6 +421,30 @@ basicLineInput =
                     e
 
 
+{-| Add basic line input design
+-}
+basicLineInput2 : Plugin msg
+basicLineInput2 =
+    pluginWithoutState
+        "Basic Line Input"
+        [ "Basic Line Input" ]
+    <|
+        \e ->
+            case e of
+                LineInput msg value ->
+                    el
+                        { defaultElAttributes
+                            | padding = 0
+                            , borderWidth = 1
+                            , borderColor = "#000000"
+                        }
+                    <|
+                        LineInput msg value
+
+                _ ->
+                    e
+
+
 {-| Add tabs
 -}
 tabPlugin : Int -> Plugin msg
